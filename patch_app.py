@@ -55,6 +55,26 @@ src = src.replace(
 ihtml = Path("/workspace/Pixal3D/index.html")
 if ihtml.exists():
     h = ihtml.read_text()
+    # crypto.randomUUID() requires a secure context (HTTPS or localhost). The
+    # Hub is served over plain HTTP on a LAN IP, so this call throws TypeError
+    # and the whole <script type="module"> aborts — empty gallery, no upload,
+    # no icons. Inject a polyfill that uses crypto.getRandomValues when
+    # available and Math.random otherwise.
+    polyfill = (
+        "if (!crypto.randomUUID) {\n"
+        "  crypto.randomUUID = function () {\n"
+        "    const b = new Uint8Array(16);\n"
+        "    (crypto.getRandomValues ? crypto.getRandomValues(b) : b.forEach((_,i,a)=>a[i]=Math.floor(Math.random()*256)));\n"
+        "    b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;\n"
+        "    const h = [...b].map(x => x.toString(16).padStart(2,'0'));\n"
+        "    return `${h.slice(0,4).join('')}-${h.slice(4,6).join('')}-${h.slice(6,8).join('')}-${h.slice(8,10).join('')}-${h.slice(10).join('')}`;\n"
+        "  };\n"
+        "}\n"
+    )
+    h = h.replace(
+        "const sessionId = crypto.randomUUID();",
+        polyfill + "        const sessionId = crypto.randomUUID();",
+    )
     for cdn, local in {
         'https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js':
             '/assets/vendor/gradio-client.min.js',
