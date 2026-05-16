@@ -49,15 +49,21 @@ src = src.replace(
     'open("/tmp/pixal3d_ready", "w").close()\n    app.launch(show_error=True, share=False)',
 )
 
-# 4. Patch index.html so the Gradio JS client is loaded from a local asset
-#    instead of jsdelivr CDN. Otherwise every page load needs internet, image
-#    picks silently fail when the CDN is blocked, and we violate Principle 1.
+# 4. Rewrite every CDN URL in index.html to point at the locally-vendored copy
+#    under /assets/vendor/ so launch is fully offline. If any CDN import fails,
+#    the entire <script type="module"> aborts and the UI breaks silently.
 ihtml = Path("/workspace/Pixal3D/index.html")
 if ihtml.exists():
-    h = ihtml.read_text().replace(
-        'https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js',
-        '/assets/vendor/gradio-client.min.js',
-    )
+    h = ihtml.read_text()
+    for cdn, local in {
+        'https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js':
+            '/assets/vendor/gradio-client.min.js',
+        'https://unpkg.com/lucide@latest':
+            '/assets/vendor/lucide.min.js',
+        'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js':
+            '/assets/vendor/model-viewer.min.js',
+    }.items():
+        h = h.replace(cdn, local)
     ihtml.write_text(h)
 
 path.write_text(src)

@@ -44,12 +44,16 @@ RUN pip install --no-cache-dir git+https://github.com/microsoft/MoGe.git
 RUN pip install --no-cache-dir \
     https://github.com/WaxacaBytes/pixal3d-spark-ai-hub/releases/download/wheels-v1/NATTEN-0.21.6-cp312-cp312-linux_aarch64.whl
 
-# Bake the Gradio JS client locally so the UI does not depend on jsdelivr CDN
-# at runtime. Without this, browsers without internet (or blocking CDNs) fail
-# silently when clicking gallery images.
+# Bake all UI JS dependencies locally so the page does not need internet at
+# load time. Without this, the entire app.py <script type="module"> aborts
+# when any CDN import fails — empty gallery, broken image picks, no icons.
 RUN mkdir -p /workspace/Pixal3D/assets/vendor && \
     curl -fsSL https://cdn.jsdelivr.net/npm/@gradio/client@2.2.0/dist/index.min.js \
-      -o /workspace/Pixal3D/assets/vendor/gradio-client.min.js
+      -o /workspace/Pixal3D/assets/vendor/gradio-client.min.js && \
+    curl -fsSL https://unpkg.com/lucide@latest \
+      -o /workspace/Pixal3D/assets/vendor/lucide.min.js && \
+    curl -fsSL https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js \
+      -o /workspace/Pixal3D/assets/vendor/model-viewer.min.js
 
 # Patch app.py: skip x86_64 utils3d wheel reinstall, force flash_attn v2
 # (no flash_attn_3 on aarch64), disable Gradio share tunneling, drop the
