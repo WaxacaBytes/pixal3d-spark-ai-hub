@@ -38,12 +38,11 @@ RUN pip install --no-cache-dir \
 # MoGe-2 (monocular geometry estimator) — pure Python, pulls from git
 RUN pip install --no-cache-dir git+https://github.com/microsoft/MoGe.git
 
-# natten (Neighborhood Attention). The wheels Pixal3D points at are x86_64,
-# so we build from source for aarch64/sm_120. NATTEN_CUDA_ARCH controls the
-# CUDA arch list; MAX_JOBS keeps memory in check on GB10.
-RUN MAX_JOBS=2 NATTEN_CUDA_ARCH="12.1" \
-    pip install --no-cache-dir --no-build-isolation natten==0.21.6 \
-    || pip install --no-cache-dir --no-build-isolation natten
+# natten (Neighborhood Attention) — prebuilt wheel for aarch64 + CUDA 12.9 +
+# Python 3.12, compiled natively on DGX Spark and hosted as a release asset on
+# this repo. This avoids ~2hr QEMU-emulated source builds in GitHub Actions.
+RUN pip install --no-cache-dir \
+    https://github.com/WaxacaBytes/pixal3d-spark-ai-hub/releases/download/wheels-v1/NATTEN-0.21.6-cp312-cp312-linux_aarch64.whl
 
 # Patch app.py: skip x86_64 utils3d wheel reinstall, force flash_attn v2
 # (no flash_attn_3 on aarch64), disable Gradio share tunneling (offline-first).
