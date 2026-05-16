@@ -47,13 +47,22 @@ RUN pip install --no-cache-dir \
 # Bake all UI JS dependencies locally so the page does not need internet at
 # load time. Without this, the entire app.py <script type="module"> aborts
 # when any CDN import fails — empty gallery, broken image picks, no icons.
-RUN mkdir -p /workspace/Pixal3D/assets/vendor && \
+RUN mkdir -p /workspace/Pixal3D/assets/vendor /workspace/Pixal3D/assets/vendor/fonts && \
     curl -fsSL https://cdn.jsdelivr.net/npm/@gradio/client@2.2.0/dist/index.min.js \
       -o /workspace/Pixal3D/assets/vendor/gradio-client.min.js && \
     curl -fsSL https://unpkg.com/lucide@latest \
       -o /workspace/Pixal3D/assets/vendor/lucide.min.js && \
     curl -fsSL https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js \
-      -o /workspace/Pixal3D/assets/vendor/model-viewer.min.js
+      -o /workspace/Pixal3D/assets/vendor/model-viewer.min.js && \
+    curl -fsSL -A "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 Chrome/120 Safari/537.36" \
+      "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" \
+      -o /workspace/Pixal3D/assets/vendor/fonts/fonts.css && \
+    cd /workspace/Pixal3D/assets/vendor/fonts && \
+    for u in $(grep -oE 'https://fonts.gstatic.com/[^)"]+\.woff2?' fonts.css | sort -u); do \
+        f=$(basename "$u"); \
+        curl -fsSL "$u" -o "$f"; \
+        sed -i "s|$u|./$f|g" fonts.css; \
+    done
 
 # Patch app.py: skip x86_64 utils3d wheel reinstall, force flash_attn v2
 # (no flash_attn_3 on aarch64), disable Gradio share tunneling, drop the

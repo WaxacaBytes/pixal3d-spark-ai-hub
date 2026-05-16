@@ -62,6 +62,11 @@ if ihtml.exists():
             '/assets/vendor/lucide.min.js',
         'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js':
             '/assets/vendor/model-viewer.min.js',
+        # Replace the entire Google Fonts <link> with our vendored CSS. Match
+        # the full URL so preconnect lines remain (browser just ignores them
+        # offline). The href= we replace is the only one that actually loads.
+        'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap':
+            '/assets/vendor/fonts/fonts.css',
     }.items():
         h = h.replace(cdn, local)
     ihtml.write_text(h)
