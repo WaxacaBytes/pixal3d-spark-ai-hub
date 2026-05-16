@@ -15,9 +15,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    environment: DockerHub
     permissions:
       contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: abelpc/pixal3d-spark
+          images: ghcr.io/waxacabytes/pixal3d-spark-ai-hub
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
@@ -52,22 +52,20 @@ jobs:
       - name: Decide publish mode
         id: publish
         shell: bash
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ] && [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
             echo "push=true" >> "$GITHUB_OUTPUT"
           else
             echo "push=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Log in to Docker Hub
+      - name: Log in to GHCR
         if: steps.publish.outputs.push == 'true'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -81,5 +79,5 @@ jobs:
           provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=abelpc/pixal3d-spark:buildcache
-          cache-to: ${{ steps.publish.outputs.push == 'true' && 'type=registry,ref=abelpc/pixal3d-spark:buildcache,mode=max' || '' }}
+          cache-from: type=registry,ref=ghcr.io/waxacabytes/pixal3d-spark-ai-hub:buildcache
+          cache-to: ${{ steps.publish.outputs.push == 'true' && 'type=registry,ref=ghcr.io/waxacabytes/pixal3d-spark-ai-hub:buildcache,mode=max' || '' }}

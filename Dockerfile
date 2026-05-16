@@ -32,7 +32,8 @@ RUN pip install --no-cache-dir \
     einops==0.8.2 \
     plyfile==1.1.3 \
     easydict==1.13 \
-    zstandard==0.25.0
+    zstandard==0.25.0 \
+    "gradio>=6.14,<7"
 
 # MoGe-2 (monocular geometry estimator) — pure Python, pulls from git
 RUN pip install --no-cache-dir git+https://github.com/microsoft/MoGe.git
@@ -44,12 +45,10 @@ RUN MAX_JOBS=2 NATTEN_CUDA_ARCH="12.1" \
     pip install --no-cache-dir --no-build-isolation natten==0.21.6 \
     || pip install --no-cache-dir --no-build-isolation natten
 
-# Patch app_local.py so it does not try to (a) re-install x86_64 utils3d wheel
-# at startup and (b) enable Gradio share tunneling (offline-first).
-RUN sed -i \
-        -e 's|subprocess.run(\[.*utils3d-0.0.2.*\], check=True)|pass  # patched: utils3d already installed from source|' \
-        -e 's|share=True|share=False|g' \
-        /workspace/Pixal3D/app_local.py
+# Patch app.py: skip x86_64 utils3d wheel reinstall, force flash_attn v2
+# (no flash_attn_3 on aarch64), disable Gradio share tunneling (offline-first).
+COPY patch_app.py /tmp/patch_app.py
+RUN python /tmp/patch_app.py && rm /tmp/patch_app.py
 
 WORKDIR /workspace/Pixal3D
 

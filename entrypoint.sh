@@ -40,7 +40,7 @@ find "${HF_HOME:-/workspace/cache/huggingface}" -path "*/RMBG*2*/birefnet.py" -e
   sed -i 's/\[x\.item() for x in torch\.linspace(0, drop_path_rate, sum(depths))\]/[float(x) for x in __import__("numpy").linspace(0, drop_path_rate, sum(depths))]/g' {} + 2>/dev/null || true
 
 if [ $# -eq 0 ]; then
-  exec python app_local.py
+  exec python app.py
 else
   exec "$@"
 fi
