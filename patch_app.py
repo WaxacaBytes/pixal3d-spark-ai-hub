@@ -49,6 +49,17 @@ src = src.replace(
     'open("/tmp/pixal3d_ready", "w").close()\n    app.launch(show_error=True, share=False)',
 )
 
+# 4. Patch index.html so the Gradio JS client is loaded from a local asset
+#    instead of jsdelivr CDN. Otherwise every page load needs internet, image
+#    picks silently fail when the CDN is blocked, and we violate Principle 1.
+ihtml = Path("/workspace/Pixal3D/index.html")
+if ihtml.exists():
+    h = ihtml.read_text().replace(
+        'https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js',
+        '/assets/vendor/gradio-client.min.js',
+    )
+    ihtml.write_text(h)
+
 path.write_text(src)
 
 # Also patch inference.py for CLI use, same ATTN_BACKEND fix.
