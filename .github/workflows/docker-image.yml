@@ -1,0 +1,85 @@
+name: Docker Image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: DockerHub
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve latest Pixal3D commit
+        id: pixal3d
+        run: |
+          set -euo pipefail
+          sha="$(curl -fsSL https://api.github.com/repos/TencentARC/Pixal3D/commits/main | jq -r '.sha[:8]')"
+          echo "ref=main" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "Using Pixal3D main @ ${sha}"
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: abelpc/pixal3d-spark
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-
+            type=raw,value=pixal3d-${{ steps.pixal3d.outputs.sha }},enable={{is_default_branch}}
+
+      - name: Decide publish mode
+        id: publish
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ] && [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to Docker Hub
+        if: steps.publish.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          build-args: |
+            PIXAL3D_REPO=https://github.com/TencentARC/Pixal3D.git
+            PIXAL3D_REF=${{ steps.pixal3d.outputs.ref }}
+          push: ${{ steps.publish.outputs.push == 'true' }}
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=abelpc/pixal3d-spark:buildcache
+          cache-to: ${{ steps.publish.outputs.push == 'true' && 'type=registry,ref=abelpc/pixal3d-spark:buildcache,mode=max' || '' }}
