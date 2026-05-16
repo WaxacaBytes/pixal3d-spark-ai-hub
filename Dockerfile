@@ -52,6 +52,13 @@ RUN python /tmp/patch_app.py && rm /tmp/patch_app.py
 
 WORKDIR /workspace/Pixal3D
 
+# Pixal3D ships a modified copy of the trellis2 package as ./pixal3d/ (adds
+# Pixal3DImageTo3DPipeline, tweaks trellis2_image_to_3d, etc.). app.py imports
+# it as `trellis2`, so we symlink and put the Pixal3D cwd on PYTHONPATH ahead
+# of the base image's TRELLIS.2 to make the Pixal3D version win.
+RUN ln -s /workspace/Pixal3D/pixal3d /workspace/Pixal3D/trellis2
+ENV PYTHONPATH="/workspace/Pixal3D:${PYTHONPATH}"
+
 ENV GRADIO_SERVER_NAME="0.0.0.0"
 ENV GRADIO_SERVER_PORT="7860"
 ENV HF_HOME="/workspace/cache/huggingface"

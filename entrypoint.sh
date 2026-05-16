@@ -14,13 +14,16 @@ echo "PyTorch: $(python -c 'import torch; print(torch.__version__)')"
 echo "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available())')"
 echo "========================================"
 
-# First-run pre-warm: download Pixal3D + MoGe + DinoV3 weights to the mounted
-# HF cache volume. Forces online mode for this one step so that subsequent
-# launches can run with HF_HUB_OFFLINE=1.
+# First-launch model fetch: any HF asset Pixal3D needs is downloaded the first
+# time the container comes up, then cached in the mounted volume. Subsequent
+# launches respect HF_HUB_OFFLINE=1 from the compose env and stay fully offline.
 PREWARM_MARKER="${HF_HOME:-/workspace/cache/huggingface}/.pixal3d_prewarmed"
 if [ ! -f "$PREWARM_MARKER" ]; then
-  echo "First launch detected — pre-downloading model weights..."
-  HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 python - <<'PYEOF'
+  echo "First launch — enabling HF online mode so init_models() can fetch all assets."
+  export HF_HUB_OFFLINE=0
+  export TRANSFORMERS_OFFLINE=0
+  # Pre-bulk the three main repos to surface DNS/auth errors early.
+  python - <<'PYEOF'
 import os
 from huggingface_hub import snapshot_download
 for repo in [
@@ -30,9 +33,16 @@ for repo in [
 ]:
     print(f"Fetching {repo}...")
     snapshot_download(repo_id=repo, token=os.environ.get("HF_TOKEN") or None)
-print("Pre-warm complete.")
+print("Bulk pre-fetch complete; remaining assets will be pulled by init_models().")
 PYEOF
-  touch "$PREWARM_MARKER"
+  # Background watcher: as soon as app.py creates /tmp/pixal3d_ready (i.e.
+  # init_models() succeeded), write the persistent prewarm marker so that
+  # subsequent container starts respect HF_HUB_OFFLINE=1 from the compose env.
+  (
+    while [ ! -f /tmp/pixal3d_ready ]; do sleep 5; done
+    touch "$PREWARM_MARKER"
+    echo "Prewarm marker written — future launches will run offline."
+  ) &
 fi
 
 # Same RMBG patch as trellis2 base (PyTorch nightly meta-tensor incompat)

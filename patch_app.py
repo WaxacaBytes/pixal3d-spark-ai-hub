@@ -41,9 +41,13 @@ src = src.replace(
     'os.environ["ATTN_BACKEND"] = "flash_attn"',
 )
 
-# 3. Disable Gradio share tunneling on the final launch line.
-src = src.replace("app.launch(show_error=True, share=True)",
-                  "app.launch(show_error=True, share=False)")
+# 3. Disable Gradio share tunneling on the final launch line, and drop a
+#    ready-marker file once init_models() has succeeded so the entrypoint can
+#    flip the offline flag for subsequent launches.
+src = src.replace(
+    "app.launch(show_error=True, share=True)",
+    'open("/tmp/pixal3d_ready", "w").close()\n    app.launch(show_error=True, share=False)',
+)
 
 path.write_text(src)
 
