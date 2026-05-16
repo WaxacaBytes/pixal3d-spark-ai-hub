@@ -19,7 +19,7 @@ ENV TORCH_CUDA_ARCH_LIST="12.1+PTX"
 
 # Clone Pixal3D into its own workspace
 ARG PIXAL3D_REPO=https://github.com/TencentARC/Pixal3D.git
-ARG PIXAL3D_REF=main
+ARG PIXAL3D_REF=master
 RUN git clone -b "$PIXAL3D_REF" "$PIXAL3D_REPO" /workspace/Pixal3D
 
 # Install the pure-Python deps Pixal3D adds on top of the trellis2 base.

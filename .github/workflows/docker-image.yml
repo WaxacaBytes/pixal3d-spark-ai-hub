@@ -32,8 +32,8 @@ jobs:
         id: pixal3d
         run: |
           set -euo pipefail
-          sha="$(curl -fsSL https://api.github.com/repos/TencentARC/Pixal3D/commits/main | jq -r '.sha[:8]')"
-          echo "ref=main" >> "$GITHUB_OUTPUT"
+          sha="$(curl -fsSL https://api.github.com/repos/TencentARC/Pixal3D/commits/master | jq -r '.sha[:8]')"
+          echo "ref=master" >> "$GITHUB_OUTPUT"
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
           echo "Using Pixal3D main @ ${sha}"
 
