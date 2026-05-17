@@ -15,6 +15,10 @@ src = path.read_text()
 
 # 0. Replace `import spaces` with a no-op shim so @spaces.GPU(duration=...)
 #    decorators become identity functions (HF ZeroGPU is not present on Spark).
+#    Also disarm Gradio's safehttpx SSRF guard: the custom index.html posts the
+#    uploaded image back as an absolute URL pointing at the server's own LAN IP
+#    (e.g. http://192.168.3.16:12158/...). safehttpx rejects RFC1918 hosts and
+#    the upload fails before Start Generation can run.
 src = src.replace(
     "import spaces",
     (
@@ -23,7 +27,11 @@ src = src.replace(
         "    def GPU(*a, **k):\n"
         "        def _d(fn): return fn\n"
         "        return _d\n"
-        "spaces = _FakeSpaces()"
+        "spaces = _FakeSpaces()\n"
+        "import safehttpx as _shx, socket as _sock\n"
+        "async def _shx_allow_lan(hostname, *a, **k):\n"
+        "    return _sock.gethostbyname(hostname)\n"
+        "_shx.async_validate_url = _shx_allow_lan"
     ),
 )
 
