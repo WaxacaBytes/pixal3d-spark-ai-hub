@@ -44,6 +44,13 @@ RUN pip install --no-cache-dir git+https://github.com/microsoft/MoGe.git
 RUN pip install --no-cache-dir \
     https://github.com/WaxacaBytes/pixal3d-spark-ai-hub/releases/download/wheels-v1/NATTEN-0.21.6-cp312-cp312-linux_aarch64.whl
 
+# Pixal3D pins utils3d-0.0.2 (pure-Python wheel, py3-none-any). The version
+# in the trellis2 base is newer and missing several APIs Pixal3D calls
+# (intrinsics_from_fov_xy, get_image_rays, ...). Force the older wheel.
+# Original app.py reinstalls this at runtime; we bake it in to stay offline.
+RUN pip install --no-cache-dir --force-reinstall --no-deps \
+    https://github.com/LDYang694/Storages/releases/download/20260430/utils3d-0.0.2-py3-none-any.whl
+
 # Bake all UI JS dependencies locally so the page does not need internet at
 # load time. Without this, the entire app.py <script type="module"> aborts
 # when any CDN import fails — empty gallery, broken image picks, no icons.

@@ -31,10 +31,7 @@ src = src.replace(
         "import safehttpx as _shx, socket as _sock\n"
         "async def _shx_allow_lan(hostname, *a, **k):\n"
         "    return _sock.gethostbyname(hostname)\n"
-        "_shx.async_validate_url = _shx_allow_lan\n"
-        "import utils3d as _u3d\n"
-        "if not hasattr(_u3d.torch, 'intrinsics_from_fov_xy'):\n"
-        "    _u3d.torch.intrinsics_from_fov_xy = lambda fov_x, fov_y: _u3d.torch.intrinsics_from_fov(fov_x=fov_x, fov_y=fov_y)"
+        "_shx.async_validate_url = _shx_allow_lan"
     ),
 )
 
