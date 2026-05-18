@@ -54,7 +54,9 @@ src = src.replace(
 #    flip the offline flag for subsequent launches.
 src = src.replace(
     "app.launch(show_error=True, share=True)",
-    'open("/tmp/pixal3d_ready", "w").close()\n    app.launch(show_error=True, share=False)',
+    'open("/tmp/pixal3d_ready", "w").close()\n'
+    '    app.launch(show_error=True, share=False, '
+    'allowed_paths=["/workspace/Pixal3D/tmp", "/workspace/Pixal3D/assets", "/tmp"])',
 )
 
 # 4. Rewrite every CDN URL in index.html to point at the locally-vendored copy
