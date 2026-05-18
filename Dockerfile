@@ -71,6 +71,12 @@ RUN mkdir -p /workspace/Pixal3D/assets/vendor /workspace/Pixal3D/assets/vendor/f
         sed -i "s|$u|./$f|g" fonts.css; \
     done
 
+# index.html references 8 sample thumbnails that aren't in the upstream git
+# repo (musicman/pizza/sculpt/treehouse/warship + 3 hash-named webps). They
+# live only on the HF Space. We vendor them so the gallery isn't broken
+# offline.
+COPY extra-samples/ /workspace/Pixal3D/assets/images/
+
 # Patch app.py: skip x86_64 utils3d wheel reinstall, force flash_attn v2
 # (no flash_attn_3 on aarch64), disable Gradio share tunneling, drop the
 # init-complete marker, and rewrite the index.html CDN import.
