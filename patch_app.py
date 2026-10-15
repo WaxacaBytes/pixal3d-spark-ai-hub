@@ -7,10 +7,31 @@
 - Disable Gradio share tunneling so launch is fully offline.
 - Load DINOv3 from Meta's own repo instead of the camenduru re-upload upstream
   names (byte-identical model.safetensors; Meta's repo is gated, manual approval).
+- Make every URL in index.html relative and serve its static files at
+  /px-assets, so the page works behind the Hub's /run/pixal3d-spark/ prefix.
+- Write GLBs through glb_export.py: the front on +Z (so the web page's viewer
+  starts from the front, not from behind) and glass left see-through.
 """
 import re
 import sys
 from pathlib import Path
+
+# Pixal3D's GLB ending, in app.py and inference.py alike: a rotation that
+# leaves the front on -Z, then the export. glb_export.export() replaces both.
+ROTATION_RE = re.compile(
+    r"(?:# Apply rotation\n\s*)?rot = np\.array\(\[\s*\[-1,\s*0,\s*0,\s*0\],\s*\[ ?0,\s*0,\s*-1,\s*0\],\s*"
+    r"\[ ?0,\s*-1,\s*0,\s*0\],\s*\[ ?0,\s*0,\s*0,\s*1\],?\s*\], dtype=np\.float64\)\s*"
+    r"glb\.apply_transform\(rot\)\n")
+
+
+def use_glb_export(src: str, export_line: str, new_line: str) -> str:
+    """Swap Pixal3D's rotation and export for glb_export.export(); fail the
+    build if upstream changed either, rather than ship the old export."""
+    src, turned = ROTATION_RE.subn("", src)
+    assert turned == 1 and src.count(export_line) == 1, "Pixal3D's GLB export changed"
+    return src.replace(export_line, new_line).replace(
+        "import numpy as np\n", "import numpy as np\nimport glb_export\n", 1)
+
 
 DINOV3_MIRROR = "camenduru/dinov3-vitl16-pretrain-lvd1689m"
 DINOV3 = "facebook/dinov3-vitl16-pretrain-lvd1689m"
@@ -64,7 +85,33 @@ src = src.replace(
     'allowed_paths=["/workspace/Pixal3D/tmp", "/workspace/Pixal3D/assets", "/tmp"])',
 )
 
-# 4. Rewrite every CDN URL in index.html to point at the locally-vendored copy
+# 4. Serve the page's static files at /px-assets (see index.html below) and
+#    the results under /tmp from plain routes. Mounted StaticFiles answer 404
+#    behind the Hub: the Hub strips /run/pixal3d-spark before forwarding, while
+#    GRADIO_ROOT_PATH makes Starlette look for that prefix in every path.
+MOUNTS = ('app.mount("/assets", StaticFiles(directory="assets"), name="assets")\n'
+          'app.mount("/tmp", StaticFiles(directory=TMP_DIR), name="tmp")\n')
+assert src.count(MOUNTS) == 1, "app.py's static mounts changed"
+src = src.replace(MOUNTS, """from fastapi import HTTPException as _HTTPException
+from fastapi.responses import FileResponse as _FileResponse
+
+def _serve_folder(prefix, folder):
+    base = os.path.realpath(folder)
+    @app.get(prefix + "/{path:path}", include_in_schema=False)
+    async def _serve(path: str):
+        full = os.path.realpath(os.path.join(base, path))
+        if not full.startswith(base + os.sep) or not os.path.isfile(full):
+            raise _HTTPException(404)
+        return _FileResponse(full)
+
+_serve_folder("/px-assets", "assets")
+_serve_folder("/tmp", TMP_DIR)
+""")
+
+# 5. GLBs through glb_export.py (see its docstring).
+src = use_glb_export(src, "glb.export(out_glb, extension_webp=True)", "glb_export.export(glb, out_glb)")
+
+# 6. Rewrite every CDN URL in index.html to point at the locally-vendored copy
 #    under /assets/vendor/ so launch is fully offline. If any CDN import fails,
 #    the entire <script type="module"> aborts and the UI breaks silently.
 ihtml = Path("/workspace/Pixal3D/index.html")
@@ -90,20 +137,44 @@ if ihtml.exists():
         "const sessionId = crypto.randomUUID();",
         polyfill + "        const sessionId = crypto.randomUUID();",
     )
+    # The models now face +Z (glb_export), so the viewer starts from the
+    # front instead of from behind.
+    assert h.count("-180deg 90deg auto") == 2, "Pixal3D's viewer camera changed"
+    h = h.replace("-180deg 90deg auto", "0deg 90deg auto")
     for cdn, local in {
         'https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js':
-            '/assets/vendor/gradio-client.min.js',
+            './px-assets/vendor/gradio-client.min.js',
         'https://unpkg.com/lucide@latest':
-            '/assets/vendor/lucide.min.js',
+            './px-assets/vendor/lucide.min.js',
         'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js':
-            '/assets/vendor/model-viewer.min.js',
+            './px-assets/vendor/model-viewer.min.js',
         # Replace the entire Google Fonts <link> with our vendored CSS. Match
         # the full URL so preconnect lines remain (browser just ignores them
         # offline). The href= we replace is the only one that actually loads.
         'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap':
-            '/assets/vendor/fonts/fonts.css',
+            './px-assets/vendor/fonts/fonts.css',
     }.items():
         h = h.replace(cdn, local)
+    # Every URL relative to the page, so it works at the root and behind the
+    # Spark AI Hub's /run/pixal3d-spark/ alike, where a root path would reach
+    # the Hub instead. The static files move to /px-assets: Gradio's own
+    # /assets route is matched first and answers 404 for them.
+    for old, new, n in (
+        ("Client.connect(window.location.origin)",
+         "Client.connect(new URL('.', window.location.href).href.replace(/\\/$/, ''))", 1),
+        ("fetch(`/progress?", "fetch(`progress?", 1),
+        ("`/tmp/${filename}`", "`tmp/${filename}`", 2),
+        ("'assets/images/", "'./px-assets/images/", None),
+        # Hand the cut-out back as the file the server returned, not as its
+        # URL: given a URL, the server downloads it, and from inside the
+        # container the address the browser used (the Hub) is unreachable or
+        # signed-in only.
+        ("preprocessedFile = processedUrl;", "preprocessedFile = result.data[0];", 1),
+        ("preprocessedFile ? handle_file(preprocessedFile)", "preprocessedFile ? preprocessedFile", 1),
+    ):
+        assert n is None and old in h or h.count(old) == n, f"index.html changed: {old}"
+        h = h.replace(old, new)
+    assert "\"/assets/" not in h and "'/assets/" not in h, "index.html has another /assets path"
     ihtml.write_text(h)
 
 path.write_text(src)
@@ -115,6 +186,7 @@ if inf.exists():
         'os.environ["ATTN_BACKEND"] = "flash_attn_3"',
         'os.environ["ATTN_BACKEND"] = "flash_attn"',
     ).replace(DINOV3_MIRROR, DINOV3)
+    s = use_glb_export(s, "glb.export(output_path, extension_webp=True)", "glb_export.export(glb, output_path)")
     inf.write_text(s)
 
 print("Patches applied.")

@@ -17,10 +17,12 @@ ENV PATH="/opt/venv/bin:${PATH}"
 ENV CUDA_HOME=/usr/local/cuda-12.9
 ENV TORCH_CUDA_ARCH_LIST="12.1+PTX"
 
-# Clone Pixal3D into its own workspace
+# Clone Pixal3D into its own workspace, pinned: the commit the published image
+# has carried so far (60d060f, before upstream's low-VRAM and multi-view
+# changes), so every patch below is tested against the code it patches.
 ARG PIXAL3D_REPO=https://github.com/TencentARC/Pixal3D.git
-ARG PIXAL3D_REF=master
-RUN git clone -b "$PIXAL3D_REF" "$PIXAL3D_REPO" /workspace/Pixal3D
+ARG PIXAL3D_REF=60d060f4782cbde58aacc32118f1e0e8f85665b0
+RUN git clone "$PIXAL3D_REPO" /workspace/Pixal3D && git -C /workspace/Pixal3D checkout "$PIXAL3D_REF"
 
 # Install the pure-Python deps Pixal3D adds on top of the trellis2 base.
 # Anything already present in the base (torch, gradio, transformers, kornia,
@@ -33,10 +35,24 @@ RUN pip install --no-cache-dir \
     plyfile==1.1.3 \
     easydict==1.13 \
     zstandard==0.25.0 \
-    "gradio>=6.14,<7"
+    gradio==6.14.0
 
-# MoGe-2 (monocular geometry estimator) — pure Python, pulls from git
-RUN pip install --no-cache-dir git+https://github.com/microsoft/MoGe.git
+# MoGe-2 (monocular geometry estimator) — pure Python, pinned to the commit
+# the image has carried (MoGe 2.0.0): MoGe 3 pulls in its own FlexGEMM build,
+# which would replace the one compiled for the GB10 in the base image. What it
+# pulls in is pinned to what the image has carried: opencv-python to the base's
+# OpenCV (5.x cannot read Pixal3D's EXR environment maps, and the web app fails
+# to start), matplotlib and its dependencies, and two packaging helpers.
+RUN pip install --no-cache-dir \
+    git+https://github.com/microsoft/MoGe.git@07444410f1e33f402353b99d6ccd26bd31e469e8 \
+    opencv-python==4.13.0.92 \
+    matplotlib==3.10.9 \
+    contourpy==1.3.3 \
+    fonttools==4.63.0 \
+    kiwisolver==1.5.0 \
+    pyparsing==3.3.2 \
+    importlib_metadata==9.0.0 \
+    zipp==3.23.1
 
 # natten (Neighborhood Attention) — prebuilt wheel for aarch64 + CUDA 12.9 +
 # Python 3.12, compiled natively on DGX Spark and hosted as a release asset on
@@ -57,7 +73,7 @@ RUN pip install --no-cache-dir --force-reinstall --no-deps \
 RUN mkdir -p /workspace/Pixal3D/assets/vendor /workspace/Pixal3D/assets/vendor/fonts && \
     curl -fsSL https://cdn.jsdelivr.net/npm/@gradio/client@2.2.0/dist/index.min.js \
       -o /workspace/Pixal3D/assets/vendor/gradio-client.min.js && \
-    curl -fsSL https://unpkg.com/lucide@latest \
+    curl -fsSL https://unpkg.com/lucide@1.16.0 \
       -o /workspace/Pixal3D/assets/vendor/lucide.min.js && \
     curl -fsSL https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js \
       -o /workspace/Pixal3D/assets/vendor/model-viewer.min.js && \
@@ -79,7 +95,9 @@ COPY extra-samples/ /workspace/Pixal3D/assets/images/
 
 # Patch app.py: skip x86_64 utils3d wheel reinstall, force flash_attn v2
 # (no flash_attn_3 on aarch64), disable Gradio share tunneling, drop the
-# init-complete marker, and rewrite the index.html CDN import.
+# init-complete marker, rewrite the index.html CDN import, and write GLBs
+# through glb_export.py (front on +Z, glass see-through).
+COPY glb_export.py /workspace/Pixal3D/glb_export.py
 COPY patch_app.py /tmp/patch_app.py
 RUN python /tmp/patch_app.py && rm /tmp/patch_app.py
 
