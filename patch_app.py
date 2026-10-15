@@ -5,13 +5,18 @@
 - Force ATTN_BACKEND to flash_attn (v2 — the only flash-attn we have on aarch64).
   The base image has flash-attn 2.7.4.post1; flash_attn_3 wheels are x86_64-only.
 - Disable Gradio share tunneling so launch is fully offline.
+- Load DINOv3 from Meta's own repo instead of the camenduru re-upload upstream
+  names (byte-identical model.safetensors; Meta's repo is gated, manual approval).
 """
 import re
 import sys
 from pathlib import Path
 
+DINOV3_MIRROR = "camenduru/dinov3-vitl16-pretrain-lvd1689m"
+DINOV3 = "facebook/dinov3-vitl16-pretrain-lvd1689m"
+
 path = Path("/workspace/Pixal3D/app.py")
-src = path.read_text()
+src = path.read_text().replace(DINOV3_MIRROR, DINOV3)
 
 # 0. Replace `import spaces` with a no-op shim so @spaces.GPU(duration=...)
 #    decorators become identity functions (HF ZeroGPU is not present on Spark).
@@ -103,13 +108,13 @@ if ihtml.exists():
 
 path.write_text(src)
 
-# Also patch inference.py for CLI use, same ATTN_BACKEND fix.
+# Also patch inference.py for CLI use, same ATTN_BACKEND and DINOv3 fixes.
 inf = Path("/workspace/Pixal3D/inference.py")
 if inf.exists():
     s = inf.read_text().replace(
         'os.environ["ATTN_BACKEND"] = "flash_attn_3"',
         'os.environ["ATTN_BACKEND"] = "flash_attn"',
-    )
+    ).replace(DINOV3_MIRROR, DINOV3)
     inf.write_text(s)
 
 print("Patches applied.")

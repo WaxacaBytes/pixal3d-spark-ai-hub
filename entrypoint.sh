@@ -27,8 +27,8 @@ if [ ! -f "$PREWARM_MARKER" ]; then
 import os
 from huggingface_hub import snapshot_download
 for repo in [
-    "TencentARC/Pixal3D-T",
-    "camenduru/dinov3-vitl16-pretrain-lvd1689m",
+    "TencentARC/Pixal3D",
+    "facebook/dinov3-vitl16-pretrain-lvd1689m",
     "Ruicheng/moge-2-vitl",
 ]:
     print(f"Fetching {repo}...")
